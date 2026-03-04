@@ -16,6 +16,10 @@ examples
 
 # compiled output
 /dist
+# Exception: allow patched dist files for Dockerfile.patch
+!dist/core/utils/media.utils.js
+!dist/core/engines/noweb/session.noweb.core.js
+!dist/core/engines/webjs/session.webjs.core.js
 /node_modules
 .yarn
 
