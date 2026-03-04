@@ -61,6 +61,7 @@ import {
   AvailableInPlusVersion,
   NotImplementedByEngineError,
 } from '@waha/core/exceptions';
+import { resolveFileToBuffer } from '@waha/core/utils/media.utils';
 import { toVcardV3 } from '@waha/core/vcard';
 import { createAgentProxy } from '@waha/core/helpers.proxy';
 import type { Agent } from 'https';
@@ -1049,16 +1050,46 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     return await this.sock.sendMessage(request.chatId, message, options);
   }
 
-  sendImage(request: MessageImageRequest) {
-    throw new AvailableInPlusVersion();
+  @Activity()
+  async sendImage(request: MessageImageRequest) {
+    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const buffer = await resolveFileToBuffer(request.file);
+    const message = {
+      image: buffer,
+      caption: request.caption || undefined,
+      mimetype: request.file.mimetype || 'image/jpeg',
+      mentions: request.mentions?.map(toJID),
+    };
+    const options = await this.getMessageOptions(request);
+    return this.sock.sendMessage(chatId, message, options);
   }
 
-  sendFile(request: MessageFileRequest) {
-    throw new AvailableInPlusVersion();
+  @Activity()
+  async sendFile(request: MessageFileRequest) {
+    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const buffer = await resolveFileToBuffer(request.file);
+    const message = {
+      document: buffer,
+      mimetype: request.file.mimetype || 'application/octet-stream',
+      fileName: (request.file as any).filename || 'file',
+      caption: request.caption || undefined,
+      mentions: request.mentions?.map(toJID),
+    };
+    const options = await this.getMessageOptions(request);
+    return this.sock.sendMessage(chatId, message, options);
   }
 
-  sendVoice(request: MessageVoiceRequest) {
-    throw new AvailableInPlusVersion();
+  @Activity()
+  async sendVoice(request: MessageVoiceRequest) {
+    const chatId = toJID(this.ensureSuffix(request.chatId));
+    const buffer = await resolveFileToBuffer(request.file);
+    const message = {
+      audio: buffer,
+      mimetype: request.file.mimetype || 'audio/ogg; codecs=opus',
+      ptt: true,
+    };
+    const options = await this.getMessageOptions(request);
+    return this.sock.sendMessage(chatId, message, options);
   }
 
   sendLinkCustomPreview(
@@ -1071,10 +1102,11 @@ export class WhatsappSessionNoWebCore extends WhatsappSession {
     file: RemoteFile | BinaryFile,
     type,
   ): Promise<any> {
-    if (file && ('url' in file || 'data' in file)) {
-      throw new AvailableInPlusVersion('Sending media (image, video, pdf)');
+    if (!file || !('url' in file || 'data' in file)) {
+      return;
     }
-    return;
+    const buffer = await resolveFileToBuffer(file);
+    return { buffer, mimetype: file.mimetype };
   }
 
   @Activity()

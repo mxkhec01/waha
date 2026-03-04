@@ -32,6 +32,7 @@ import {
   AvailableInPlusVersion,
   NotImplementedByEngineError,
 } from '@waha/core/exceptions';
+import { resolveFileToBuffer } from '@waha/core/utils/media.utils';
 import { IMediaEngineProcessor } from '@waha/core/media/IMediaEngineProcessor';
 import { QR } from '@waha/core/QR';
 import { StatusToAck } from '@waha/core/utils/acks';
@@ -804,16 +805,53 @@ export class WhatsappSessionWebJSCore extends WhatsappSession {
     );
   }
 
-  sendImage(request: MessageImageRequest) {
-    throw new AvailableInPlusVersion();
+  @Activity()
+  async sendImage(request: MessageImageRequest) {
+    const chatId = this.ensureSuffix(request.chatId);
+    const buffer = await resolveFileToBuffer(request.file);
+    const media = new MessageMedia(
+      request.file.mimetype || 'image/jpeg',
+      buffer.toString('base64'),
+      (request.file as any).filename || undefined,
+    );
+    const options = {
+      ...this.getMessageOptions(request),
+      caption: request.caption || undefined,
+    };
+    return this.whatsapp.sendMessage(chatId, media, options);
   }
 
-  sendFile(request: MessageFileRequest) {
-    throw new AvailableInPlusVersion();
+  @Activity()
+  async sendFile(request: MessageFileRequest) {
+    const chatId = this.ensureSuffix(request.chatId);
+    const buffer = await resolveFileToBuffer(request.file);
+    const media = new MessageMedia(
+      request.file.mimetype || 'application/octet-stream',
+      buffer.toString('base64'),
+      (request.file as any).filename || 'file',
+    );
+    const options = {
+      ...this.getMessageOptions(request),
+      caption: request.caption || undefined,
+      sendMediaAsDocument: true,
+    };
+    return this.whatsapp.sendMessage(chatId, media, options);
   }
 
-  sendVoice(request: MessageVoiceRequest) {
-    throw new AvailableInPlusVersion();
+  @Activity()
+  async sendVoice(request: MessageVoiceRequest) {
+    const chatId = this.ensureSuffix(request.chatId);
+    const buffer = await resolveFileToBuffer(request.file);
+    const media = new MessageMedia(
+      request.file.mimetype || 'audio/ogg; codecs=opus',
+      buffer.toString('base64'),
+      'voice-message.ogg',
+    );
+    const options = {
+      ...this.getMessageOptions(request),
+      sendAudioAsVoice: true,
+    };
+    return this.whatsapp.sendMessage(chatId, media, options);
   }
 
   sendButtonsReply(request: MessageButtonReply) {
@@ -2145,8 +2183,7 @@ export class WhatsappSessionWebJSCore extends WhatsappSession {
 }
 
 export class WEBJSEngineMediaProcessor
-  implements IMediaEngineProcessor<Message>
-{
+  implements IMediaEngineProcessor<Message> {
   hasMedia(message: Message): boolean {
     if (!message.hasMedia) {
       return false;
