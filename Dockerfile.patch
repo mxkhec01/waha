@@ -1,0 +1,8 @@
+# Lightweight patch image — extends official WAHA and overlays only modified files
+# This avoids rebuilding the entire WAHA image (which requires SSH access to private repos)
+FROM devlikeapro/waha:latest
+
+# Copy only the modified compiled JS files over the originals
+COPY dist/core/utils/media.utils.js /app/dist/core/utils/media.utils.js
+COPY dist/core/engines/noweb/session.noweb.core.js /app/dist/core/engines/noweb/session.noweb.core.js
+COPY dist/core/engines/webjs/session.webjs.core.js /app/dist/core/engines/webjs/session.webjs.core.js
