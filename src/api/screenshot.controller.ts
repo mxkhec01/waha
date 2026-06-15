@@ -24,14 +24,14 @@ import { Action } from '@waha/core/auth/casl.types';
 @Controller('api')
 @ApiTags('📱 Pairing')
 @UseGuards(PoliciesGuard)
-@CheckPolicies(CanSession(Action.Use, FromQuery('session')))
+@CheckPolicies(CanSession(Action.Control, FromQuery('session')))
 export class ScreenshotController {
   constructor(private manager: SessionManager) {}
 
   @Get('/screenshot')
   @ApiOperation({
     summary:
-      'Get a screenshot of the current WhatsApp session (**WEBJS** only)',
+      'Get a screenshot of the current WhatsApp session (**WEBJS/WPP** only)',
   })
   @UseInterceptors(new BufferResponseInterceptor('image/jpeg'))
   @ApiFileAcceptHeader('image/jpeg')

@@ -21,6 +21,7 @@ const WebjsClientCore_1 = require("./WebjsClientCore");
 const WPage_1 = require("./WPage");
 const exceptions_1 = require("../../exceptions");
 const media_utils_1 = require("../../utils/media.utils");
+const LottieMediaProcessorWrapper_1 = require("../../media/LottieMediaProcessorWrapper");
 const QR_1 = require("../../QR");
 const acks_1 = require("../../utils/acks");
 const ids_1 = require("../../utils/ids");
@@ -52,6 +53,9 @@ const jids_1 = require("../../utils/jids");
 const activity_1 = require("../../abc/activity");
 const const_1 = require("../const");
 const env_1 = require("../../env");
+const chrome_1 = require("../../utils/chrome");
+const processes_1 = require("../../utils/processes");
+const version_1 = require("../../../version");
 class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
     constructor(config) {
         super(config);
@@ -100,6 +104,10 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
                 strict: true,
             },
         };
+    }
+    getUserDataDir() {
+        const base = process.env.WAHA_LOCAL_STORE_BASE_DIR || './.sessions';
+        return `${base}/webjs/default/session-${this.name}`;
     }
     async buildClient() {
         const clientOptions = this.getClientOptions();
@@ -167,6 +175,11 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
             });
             this.whatsapp.events.on(WPage_1.PAGE_CALL_ERROR_EVENT, (event) => {
                 if (event.error instanceof puppeteer_1.ProtocolError) {
+                    if (this.shouldIgnoreProtocolError(event.error)) {
+                        this.logger.warn(`ProtocolError when calling page method: ${String(event.method)}, ignoring...`);
+                        this.logger.warn(event.error);
+                        return;
+                    }
                     this.logger.error(`ProtocolError when calling page method: ${String(event.method)}, restarting client...`);
                     this.logger.error(event.error);
                     this.failed();
@@ -190,6 +203,8 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
         this.subscribeEngineEvents2();
     }
     async start() {
+        await (0, processes_1.killProcessesByPatterns)([version_1.IsChrome ? 'chrome' : 'chromium', `--a-waha-session=${this.name}`], 'SIGKILL', this.logger);
+        await (0, chrome_1.removeSingletonFiles)(this.getUserDataDir());
         this.status = enums_dto_1.WAHASessionStatus.STARTING;
         await this.init().catch((err) => {
             this.logger.error('Failed to start the client');
@@ -210,6 +225,11 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
     failed() {
         this.status = enums_dto_1.WAHASessionStatus.FAILED;
         this.restartClient();
+    }
+    shouldIgnoreProtocolError(error) {
+        var _a;
+        const message = (_a = error === null || error === void 0 ? void 0 : error.message) !== null && _a !== void 0 ? _a : String(error !== null && error !== void 0 ? error : '');
+        return message.includes('Network.getResponseBody');
     }
     async unpair() {
         this.unpairing = true;
@@ -603,7 +623,41 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
         return { ids: null };
     }
     async getChatMessage(chatId, messageId, query) {
-        const message = await this.whatsapp.getMessageById(messageId);
+        chatId = this.ensureSuffix(chatId);
+        if ((0, jids_1.isJidStatusBroadcast)(chatId) && !messageId.includes('_')) {
+            const me = this.getSessionMeInfo();
+            const lid = me.lid || (await this.whatsapp.findLIDByPhoneNumber(me.id));
+            messageId = (0, ids_1.SerializeMessageKey)({
+                fromMe: true,
+                id: messageId,
+                remoteJid: const_1.Jid.BROADCAST,
+                participant: lid,
+            });
+        }
+        let message = null;
+        if ((0, jids_1.isLidUser)(chatId) || (0, jids_1.isJidCus)(chatId)) {
+            if (!messageId.includes('_')) {
+                if (!message) {
+                    const id = (0, ids_1.SerializeMessageKey)({
+                        fromMe: true,
+                        id: messageId,
+                        remoteJid: chatId,
+                    });
+                    message = await this.whatsapp.getMessageById(id);
+                }
+                if (!message) {
+                    const id = (0, ids_1.SerializeMessageKey)({
+                        fromMe: false,
+                        id: messageId,
+                        remoteJid: chatId,
+                    });
+                    message = await this.whatsapp.getMessageById(id);
+                }
+            }
+        }
+        if (!message) {
+            message = await this.whatsapp.getMessageById(messageId);
+        }
         if (!message)
             return null;
         if ((0, jids_1.isJidGroup)(message.id.remote) ||
@@ -1160,10 +1214,17 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
             .switch(this.callRejected$.asObservable());
     }
     async processIncomingMessage(message, downloadMedia = true) {
+        var _a;
         const wamessage = this.toWAMessage(message);
         if (downloadMedia) {
             const media = await this.downloadMediaSafe(message);
             wamessage.media = media;
+        }
+        if (downloadMedia && ((_a = wamessage.replyTo) === null || _a === void 0 ? void 0 : _a.hasMedia)) {
+            const quotedMessage = await message.getQuotedMessage().catch(() => null);
+            if (quotedMessage) {
+                wamessage.replyTo.media = await this.downloadMediaSafe(quotedMessage);
+            }
         }
         return wamessage;
     }
@@ -1188,6 +1249,10 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
             if (reaction.timestamp < this.lastQRDate.getTime() / 1000) {
                 return null;
             }
+        }
+        const twoDaysAgoSec = (Date.now() - WhatsappSessionWebJSCore.REACTION_MAX_AGE_MS) / 1000;
+        if (reaction.timestamp < twoDaysAgoSec) {
+            return null;
         }
         const source = this.getMessageSource(reaction.id.id);
         return {
@@ -1296,15 +1361,20 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
         };
     }
     extractReplyTo(message) {
-        var _a, _b;
-        const quotedMsg = (_a = message.rawData) === null || _a === void 0 ? void 0 : _a.quotedMsg;
-        if (!quotedMsg) {
+        var _a;
+        const rawData = message.rawData;
+        const quotedMsg = rawData === null || rawData === void 0 ? void 0 : rawData.quotedMsg;
+        const quotedStanzaId = (rawData === null || rawData === void 0 ? void 0 : rawData.quotedStanzaID) || (rawData === null || rawData === void 0 ? void 0 : rawData.quotedStanzaId);
+        if (!quotedMsg && !quotedStanzaId) {
             return;
         }
+        const quotedParticipant = (rawData === null || rawData === void 0 ? void 0 : rawData.quotedParticipant) || (quotedMsg === null || quotedMsg === void 0 ? void 0 : quotedMsg.author) || (quotedMsg === null || quotedMsg === void 0 ? void 0 : quotedMsg.from);
         return {
-            id: (_b = quotedMsg.id) === null || _b === void 0 ? void 0 : _b.id,
-            participant: quotedMsg.author || quotedMsg.from,
-            body: quotedMsg.caption || quotedMsg.body,
+            id: quotedStanzaId || ((_a = quotedMsg === null || quotedMsg === void 0 ? void 0 : quotedMsg.id) === null || _a === void 0 ? void 0 : _a.id),
+            participant: quotedParticipant,
+            body: (quotedMsg === null || quotedMsg === void 0 ? void 0 : quotedMsg.caption) || (quotedMsg === null || quotedMsg === void 0 ? void 0 : quotedMsg.body),
+            hasMedia: Boolean(quotedMsg === null || quotedMsg === void 0 ? void 0 : quotedMsg.directPath),
+            media: null,
             _data: quotedMsg,
         };
     }
@@ -1349,7 +1419,8 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
         return null;
     }
     async downloadMedia(message) {
-        const processor = new WEBJSEngineMediaProcessor();
+        let processor = new WEBJSEngineMediaProcessor();
+        processor = new LottieMediaProcessorWrapper_1.LottieMediaProcessorWrapper(processor, this.logger);
         const media = await this.mediaManager.processMedia(processor, message, this.name);
         return media;
     }
@@ -1365,6 +1436,13 @@ class WhatsappSessionWebJSCore extends session_abc_1.WhatsappSession {
     }
 }
 exports.WhatsappSessionWebJSCore = WhatsappSessionWebJSCore;
+WhatsappSessionWebJSCore.REACTION_MAX_AGE_MS = 2 * 24 * 60 * 60 * 1000;
+__decorate([
+    (0, activity_1.Activity)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [chatting_dto_1.CheckNumberStatusQuery]),
+    __metadata("design:returntype", Promise)
+], WhatsappSessionWebJSCore.prototype, "checkNumberStatus", null);
 __decorate([
     (0, activity_1.Activity)(),
     __metadata("design:type", Function),
@@ -1377,6 +1455,12 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], WhatsappSessionWebJSCore.prototype, "setProfileStatus", null);
+__decorate([
+    (0, activity_1.Activity)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], WhatsappSessionWebJSCore.prototype, "rejectCall", null);
 __decorate([
     (0, activity_1.Activity)(),
     __metadata("design:type", Function),

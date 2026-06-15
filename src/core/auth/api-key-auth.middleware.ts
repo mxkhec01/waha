@@ -3,13 +3,20 @@ import {
   NestMiddleware,
   UnauthorizedException,
 } from '@nestjs/common';
+import { IApiKeyAuth, NoAuth } from '@waha/core/auth/auth';
 import * as passport from 'passport';
 
 @Injectable()
 export class ApiKeyAuthMiddleware implements NestMiddleware {
-  constructor() {}
+  constructor(private auth: IApiKeyAuth) {}
 
   use(req: any, res: any, next: () => void) {
+    if (this.auth instanceof NoAuth) {
+      delete req.query['x-api-key'];
+      next();
+      return;
+    }
+
     passport.authenticate('headerapikey', { session: false }, (err, user?) => {
       if (err) {
         const exception =
@@ -25,6 +32,7 @@ export class ApiKeyAuthMiddleware implements NestMiddleware {
         return;
       }
       req.user = user;
+      delete req.query['x-api-key'];
       next();
     })(req, res, next);
   }

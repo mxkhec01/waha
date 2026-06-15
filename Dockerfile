@@ -6,28 +6,11 @@ ARG GOLANG_IMAGE_TAG=1.24-bookworm
 #
 FROM node:${NODE_IMAGE_TAG} AS build
 ENV PUPPETEER_SKIP_DOWNLOAD=True
-ENV RUST_BUN_VERSION=1.3.9
-ENV RUSTUP_TOOLCHAIN=nightly-2026-01-30
-ENV RUST_WASM_PACK_VERSION=0.14.0
-ENV RUST_BUN_INSTALL=/root/.bun
-ENV PATH=${RUST_BUN_INSTALL}/bin:/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # git + build toolchain for git deps
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git python3 build-essential curl ca-certificates unzip && \
     rm -rf /var/lib/apt/lists/*
-
-# bun + rust toolchains for whatsapp-rust-bridge prepare scripts
-RUN set -eux; \
-    mkdir -p "${RUST_BUN_INSTALL}"; \
-    curl -fsSL https://bun.sh/install | bash -s -- bun-v${RUST_BUN_VERSION}; \
-    curl -fsSL https://sh.rustup.rs | bash -s -- -y --default-toolchain ${RUSTUP_TOOLCHAIN}; \
-    /root/.cargo/bin/rustup target add wasm32-unknown-unknown; \
-    /root/.cargo/bin/cargo install wasm-pack --vers ${RUST_WASM_PACK_VERSION} --locked; \
-    "${RUST_BUN_INSTALL}/bin/bun" --version; \
-    /root/.cargo/bin/cargo --version; \
-    /root/.cargo/bin/rustc --version; \
-    /root/.cargo/bin/wasm-pack --version
 
 # npm packages
 WORKDIR /git
@@ -44,6 +27,21 @@ WORKDIR /git
 ADD . /git
 RUN yarn install
 RUN yarn build && find ./dist -name "*.d.ts" -delete
+
+# Rebuild sharp from source on x86-64 so it runs on pre-v2 CPUs (no SSE4.2 requirement).
+# The prebuilt @img/sharp-linux-x64 binary requires x86-64-v2; -march=x86-64 limits
+# code generation to baseline x86-64 (SSE2 only). ARM64 prebuilts have no such
+# constraint, so no rebuild is needed there.
+# We call sharp's own install/build.js (not npm rebuild) so it first generates config.gypi
+# with include/lib paths pointing to its bundled @img/sharp-libvips-linux-x64 package,
+# then invokes node-gyp with those paths. Without this step node-gyp cannot find vips headers.
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+        LIBVIPS_DEV_VER=$(node -e "require('/git/node_modules/sharp/package.json').devDependencies['@img/sharp-libvips-dev']" | tr -d '^') && \
+        npm install --prefix /tmp/sharp-dev --no-package-lock "@img/sharp-libvips-dev@${LIBVIPS_DEV_VER}" && \
+        cp -r /tmp/sharp-dev/node_modules/@img/sharp-libvips-dev /git/node_modules/@img/ && \
+        cd /git/node_modules/sharp && \
+        PATH="/git/node_modules/.bin:$PATH" CFLAGS="-march=x86-64" CXXFLAGS="-march=x86-64" node install/build.js; \
+    fi
 
 #
 # Dashboard
@@ -249,7 +247,7 @@ ENV CHOKIDAR_INTERVAL=5000
 ENV WAHA_ZIPPER=ZIPUNZIP
 
 # GOWS - use libc DNS resolver
-ENV GODEBUG netdns=cgo
+ENV GODEBUG=netdns=cgo
 
 # Run command, etc
 EXPOSE 3000

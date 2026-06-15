@@ -8,6 +8,13 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __asyncValues = (this && this.__asyncValues) || function (o) {
+    if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
+    var m = o[Symbol.asyncIterator], i;
+    return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function () { return this; }, i);
+    function verb(n) { i[n] = o[n] && function (v) { return new Promise(function (resolve, reject) { v = o[n](v), settle(resolve, reject, v.done, v.value); }); }; }
+    function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ALL_JID = exports.NOWEBEngineMediaProcessor = exports.WhatsappSessionNoWebCore = exports.BaileysEvents = void 0;
 exports.buildMessageId = buildMessageId;
@@ -15,7 +22,6 @@ exports.getFromToParticipant = getFromToParticipant;
 exports.getDestination = getDestination;
 exports.extractBody = extractBody;
 const baileys_1 = require("@adiwajshing/baileys");
-const baileys_2 = require("@adiwajshing/baileys");
 const LabelAssociation_1 = require("@adiwajshing/baileys/lib/Types/LabelAssociation");
 const jid_utils_1 = require("@adiwajshing/baileys/lib/WABinary/jid-utils");
 const common_1 = require("@nestjs/common");
@@ -29,6 +35,7 @@ const exceptions_1 = require("../../exceptions");
 const media_utils_1 = require("../../utils/media.utils");
 const vcard_1 = require("../../vcard");
 const helpers_proxy_1 = require("../../helpers.proxy");
+const LottieMediaProcessorWrapper_1 = require("../../media/LottieMediaProcessorWrapper");
 const QR_1 = require("../../QR");
 const acks_1 = require("../../utils/acks");
 const pairs_1 = require("../../../utils/pairs");
@@ -59,6 +66,7 @@ const NowebPersistentStore_1 = require("./store/NowebPersistentStore");
 const NowebStorageFactoryCore_1 = require("./store/NowebStorageFactoryCore");
 const utils_1 = require("./utils");
 const pwa_1 = require("../../utils/pwa");
+const secretEncryptedMessageEdit_1 = require("../../utils/secretEncryptedMessageEdit");
 const locaiton_1 = require("../waproto/locaiton");
 const vcards_1 = require("../waproto/vcards");
 const activity_1 = require("../../abc/activity");
@@ -186,13 +194,13 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
     async makeSocket() {
         if (!this.authNOWEBStore) {
             const store = await this.authFactory.buildAuth(this.sessionStore, this.name);
-            store.state.keys = (0, baileys_2.makeCacheableSignalKeyStore)(store.state.keys, this.engineLogger);
+            store.state.keys = (0, baileys_1.makeCacheableSignalKeyStore)(store.state.keys, this.engineLogger);
             this.authNOWEBStore = store;
         }
         const { state, saveCreds } = this.authNOWEBStore;
         const agents = this.makeProxyAgents();
         const socketConfig = this.getSocketConfig(agents, state);
-        const sock = (0, baileys_2.default)(socketConfig);
+        const sock = (0, baileys_1.default)(socketConfig);
         sock.ev.on('creds.update', saveCreds);
         return sock;
     }
@@ -260,7 +268,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
     }
     async getMessage(key) {
         if (!this.store) {
-            return baileys_2.proto.Message.create({});
+            return baileys_1.proto.Message.create({});
         }
         const msg = await this.store.loadMessage(key.remoteJid, key.id);
         return (msg === null || msg === void 0 ? void 0 : msg.message) || undefined;
@@ -301,7 +309,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
                 this.qr.save('');
                 const error = lastDisconnect.error;
                 const statusCode = (_a = error === null || error === void 0 ? void 0 : error.output) === null || _a === void 0 ? void 0 : _a.statusCode;
-                const restartRequired = statusCode === baileys_2.DisconnectReason.restartRequired;
+                const restartRequired = statusCode === baileys_1.DisconnectReason.restartRequired;
                 if (restartRequired) {
                     this.restartClient();
                     return;
@@ -316,7 +324,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
                     await this.failed();
                     return;
                 }
-                const shouldReconnect = statusCode !== baileys_2.DisconnectReason.loggedOut;
+                const shouldReconnect = statusCode !== baileys_1.DisconnectReason.loggedOut;
                 if (shouldReconnect) {
                     if (lastDisconnect.error) {
                         this.logger.info(`Connection closed due to '${lastDisconnect.error}', reconnecting...`);
@@ -386,7 +394,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
             var _a;
             for (const message of messages) {
                 if ((0, pwa_1.IsEditedMessage)(message.message)) {
-                    const content = (0, baileys_2.normalizeMessageContent)(message.message);
+                    const content = (0, baileys_1.normalizeMessageContent)(message.message);
                     const protocolMsg = content === null || content === void 0 ? void 0 : content.protocolMessage;
                     (_a = this.sock) === null || _a === void 0 ? void 0 : _a.ev.emit('messages.update', [
                         {
@@ -407,7 +415,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
                 return;
             }
             for (const message of messages) {
-                const content = (0, baileys_2.normalizeMessageContent)(message.message);
+                const content = (0, baileys_1.normalizeMessageContent)(message.message);
                 if (!(content === null || content === void 0 ? void 0 : content.pollUpdateMessage)) {
                     continue;
                 }
@@ -420,12 +428,12 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
                     continue;
                 }
                 const key = message.key;
-                const myIds = [(0, baileys_2.jidNormalizedUser)(me.id), (0, baileys_2.jidNormalizedUser)(me.lid)];
+                const myIds = [(0, baileys_1.jidNormalizedUser)(me.id), (0, baileys_1.jidNormalizedUser)(me.lid)];
                 const participantIds = [
-                    (0, baileys_2.jidNormalizedUser)(key === null || key === void 0 ? void 0 : key.participantAlt),
-                    (0, baileys_2.jidNormalizedUser)(key === null || key === void 0 ? void 0 : key.remoteJidAlt),
-                    (0, baileys_2.jidNormalizedUser)(key === null || key === void 0 ? void 0 : key.participant),
-                    (0, baileys_2.jidNormalizedUser)(key === null || key === void 0 ? void 0 : key.remoteJid),
+                    (0, baileys_1.jidNormalizedUser)(key === null || key === void 0 ? void 0 : key.participantAlt),
+                    (0, baileys_1.jidNormalizedUser)(key === null || key === void 0 ? void 0 : key.remoteJidAlt),
+                    (0, baileys_1.jidNormalizedUser)(key === null || key === void 0 ? void 0 : key.participant),
+                    (0, baileys_1.jidNormalizedUser)(key === null || key === void 0 ? void 0 : key.remoteJid),
                 ];
                 let creators = creationMsgKey.fromMe
                     ? [...myIds, ...participantIds]
@@ -439,7 +447,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
                 for (const [pollCreatorJid, voterJid] of (0, pairs_1.pairs)(creators, votes)) {
                     try {
                         const pollEncKey = (_a = pollMsg.messageContextInfo) === null || _a === void 0 ? void 0 : _a.messageSecret;
-                        const voteMsg = (0, baileys_2.decryptPollVote)(content.pollUpdateMessage.vote, {
+                        const voteMsg = (0, baileys_1.decryptPollVote)(content.pollUpdateMessage.vote, {
                             pollCreatorJid: pollCreatorJid,
                             pollMsgId: creationMsgKey.id,
                             pollEncKey: pollEncKey,
@@ -488,7 +496,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
             var _a, _b, _c, _d, _e, _f, _g, _h;
             const meId = (_d = (_c = (_b = (_a = this.sock) === null || _a === void 0 ? void 0 : _a.authState) === null || _b === void 0 ? void 0 : _b.creds) === null || _c === void 0 ? void 0 : _c.me) === null || _d === void 0 ? void 0 : _d.id;
             for (const message of messages) {
-                if (!(0, baileys_2.isRealMessage)(message)) {
+                if (!(0, baileys_1.isRealMessage)(message)) {
                     continue;
                 }
                 if (message.key.fromMe) {
@@ -525,11 +533,11 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         if (!me) {
             return null;
         }
-        const meId = (0, baileys_2.jidNormalizedUser)(me.id);
+        const meId = (0, baileys_1.jidNormalizedUser)(me.id);
         return {
             id: (0, jids_1.toCusFormat)(meId),
             pushName: me.name,
-            lid: (0, baileys_2.jidNormalizedUser)(me.lid),
+            lid: (0, baileys_1.jidNormalizedUser)(me.lid),
         };
     }
     getQR() {
@@ -627,7 +635,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         const jid = (0, jids_1.toJID)(this.ensureSuffix(chatId));
         const key = (0, ids_1.parseMessageIdSerialized)(messageId);
         const stored = await ((_a = this.store) === null || _a === void 0 ? void 0 : _a.loadMessage(key.remoteJid, key.id).catch(() => null));
-        const content = (0, baileys_2.extractMessageContent)(stored === null || stored === void 0 ? void 0 : stored.message);
+        const content = (0, baileys_1.extractMessageContent)(stored === null || stored === void 0 ? void 0 : stored.message);
         let editedMessage = undefined;
         if (content === null || content === void 0 ? void 0 : content.imageMessage) {
             editedMessage = {
@@ -820,9 +828,11 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         return this.sock.sendPresenceUpdate('paused', chatId);
     }
     async getChatMessages(chatId, query, filter) {
+        var _a;
         const downloadMedia = query.downloadMedia;
         const pagination = query;
-        const messages = await this.store.getMessagesByJid((0, jids_1.toJID)(chatId), filter, pagination);
+        const merge = (_a = query.merge) !== null && _a !== void 0 ? _a : true;
+        const messages = await this.store.getMessagesByJid((0, jids_1.toJID)(chatId), filter, pagination, merge);
         const promises = [];
         for (const msg of messages) {
             promises.push(this.processIncomingMessage(msg, downloadMedia));
@@ -835,8 +845,10 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         return this.readChatMessagesWSImpl(chatId, request);
     }
     async getChatMessage(chatId, messageId, query) {
+        var _a;
         const key = (0, ids_1.parseMessageIdSerialized)(messageId, true);
-        const message = await this.store.getMessageById((0, jids_1.toJID)(chatId), key.id);
+        const merge = (_a = query.merge) !== null && _a !== void 0 ? _a : true;
+        const message = await this.store.getMessageById((0, jids_1.toJID)(chatId), key.id, merge);
         if (!message)
             return null;
         return await this.processIncomingMessage(message, query.downloadMedia);
@@ -846,7 +858,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         const key = (0, ids_1.parseMessageIdSerialized)(messageId);
         await this.sock.sendMessage(jid, {
             pin: key,
-            type: baileys_2.proto.PinInChat.Type.PIN_FOR_ALL,
+            type: baileys_1.proto.PinInChat.Type.PIN_FOR_ALL,
             time: duration,
         });
         return true;
@@ -856,7 +868,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         const key = (0, ids_1.parseMessageIdSerialized)(messageId);
         await this.sock.sendMessage(jid, {
             pin: key,
-            type: baileys_2.proto.PinInChat.Type.UNPIN_FOR_ALL,
+            type: baileys_1.proto.PinInChat.Type.UNPIN_FOR_ALL,
         });
         return true;
     }
@@ -895,27 +907,31 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         }, (0, jids_1.toJID)(request.chatId));
     }
     async getChats(pagination) {
-        const chats = await this.store.getChats(pagination, true);
+        var _a;
+        const merge = (_a = pagination.merge) !== null && _a !== void 0 ? _a : true;
+        const chats = await this.store.getChats(pagination, true, undefined, merge);
         chats.forEach((chat) => delete chat.unreadCount);
         return chats;
     }
     async getChatsOverview(pagination, filter) {
+        var _a;
+        const merge = (_a = pagination.merge) !== null && _a !== void 0 ? _a : true;
         let jidFilter;
         if ((filter === null || filter === void 0 ? void 0 : filter.ids) && filter.ids.length > 0) {
             jidFilter = {
                 ids: filter.ids.map((id) => (0, jids_1.toJID)(id)),
             };
         }
-        const chats = await this.store.getChats(pagination, false, jidFilter);
+        const chats = await this.store.getChats(pagination, false, jidFilter, merge);
         chats.forEach((chat) => delete chat.unreadCount);
         const promises = [];
         for (const chat of chats) {
-            promises.push(this.fetchChatSummary(chat));
+            promises.push(this.fetchChatSummary(chat, merge));
         }
         const result = await Promise.all(promises);
         return result;
     }
-    async fetchChatSummary(chat) {
+    async fetchChatSummary(chat, merge) {
         const id = (0, jids_1.toCusFormat)(chat.id);
         let name = chat.name;
         if (!name) {
@@ -924,7 +940,13 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
             name = (contact === null || contact === void 0 ? void 0 : contact.name) || (contact === null || contact === void 0 ? void 0 : contact.notify);
         }
         const picture = await this.getContactProfilePicture(chat.id, false);
-        const messages = await this.getChatMessages(chat.id, { limit: 1, offset: 0, downloadMedia: false }, {});
+        const lastMessageQuery = {
+            limit: 1,
+            offset: 0,
+            downloadMedia: false,
+            merge: merge,
+        };
+        const messages = await this.getChatMessages(chat.id, lastMessageQuery, {});
         const message = messages.length > 0 ? messages[0] : null;
         return {
             id: id,
@@ -1355,7 +1377,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         if (!((_c = (_b = (_a = this.sock) === null || _a === void 0 ? void 0 : _a.authState) === null || _b === void 0 ? void 0 : _b.creds) === null || _c === void 0 ? void 0 : _c.me)) {
             return;
         }
-        const myJID = (0, baileys_2.jidNormalizedUser)(this.sock.authState.creds.me.id);
+        const myJID = (0, baileys_1.jidNormalizedUser)(this.sock.authState.creds.me.id);
         if (!jids.includes(myJID)) {
             jids.unshift(myJID);
         }
@@ -1442,15 +1464,15 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         this.events2.get(enums_dto_1.WAHAEvents.ENGINE_EVENT).switch(all$);
         const messagesUpsert$ = (0, rxjs_1.fromEvent)(this.sock.ev, 'messages.upsert').pipe((0, operators_1.map)((event) => event.messages), (0, rxjs_1.mergeAll)(), (0, rxjs_1.filter)((msg) => this.jids.include(msg.key.remoteJid)), (0, rxjs_1.share)());
         let [messagesFromMe$, messagesFromOthers$] = (0, rxjs_1.partition)(messagesUpsert$, isMine);
-        messagesFromMe$ = messagesFromMe$.pipe((0, rxjs_1.mergeMap)((msg) => this.processIncomingMessage(msg, true)), (0, rxjs_1.share)());
-        messagesFromOthers$ = messagesFromOthers$.pipe((0, rxjs_1.mergeMap)((msg) => this.processIncomingMessage(msg, true)), (0, rxjs_1.share)());
+        messagesFromMe$ = messagesFromMe$.pipe((0, rxjs_1.mergeMap)((msg) => this.processIncomingMessage(msg, true)), (0, rxjs_1.filter)(Boolean), (0, reactive_1.DistinctMessages)(), (0, rxjs_1.share)());
+        messagesFromOthers$ = messagesFromOthers$.pipe((0, rxjs_1.mergeMap)((msg) => this.processIncomingMessage(msg, true)), (0, rxjs_1.filter)(Boolean), (0, reactive_1.DistinctMessages)(), (0, rxjs_1.share)());
         const messagesFromAll$ = (0, rxjs_1.merge)(messagesFromMe$, messagesFromOthers$);
         this.events2.get(enums_dto_1.WAHAEvents.MESSAGE).switch(messagesFromOthers$);
         this.events2.get(enums_dto_1.WAHAEvents.MESSAGE_ANY).switch(messagesFromAll$);
         const messagesRevoked$ = messagesUpsert$.pipe((0, rxjs_1.filter)((message) => {
             var _a, _b;
             return ((_b = (_a = message.message) === null || _a === void 0 ? void 0 : _a.protocolMessage) === null || _b === void 0 ? void 0 : _b.type) ===
-                baileys_2.proto.Message.ProtocolMessage.Type.REVOKE;
+                baileys_1.proto.Message.ProtocolMessage.Type.REVOKE;
         }), (0, rxjs_1.mergeMap)(async (message) => {
             var _a;
             const afterMessage = this.toWAMessage(message);
@@ -1463,12 +1485,23 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
             };
         }));
         this.events2.get(enums_dto_1.WAHAEvents.MESSAGE_REVOKED).switch(messagesRevoked$);
-        const messagesEdited$ = messagesUpsert$.pipe((0, rxjs_1.filter)((message) => (0, pwa_1.IsEditedMessage)(message.message)), (0, rxjs_1.mergeMap)(async (message) => {
-            var _a;
+        const messagesEdited$ = messagesUpsert$.pipe((0, rxjs_1.filter)((message) => (0, pwa_1.IsEditedMessage)(message.message) ||
+            (0, pwa_1.IsSecretEncryptedMessageEdit)(message.message)), (0, rxjs_1.mergeMap)(async (message) => {
+            var _a, _b;
             const waMessage = this.toWAMessage(message);
-            const content = (0, baileys_2.normalizeMessageContent)(message.message);
-            const body = extractBody(content.protocolMessage.editedMessage) || '';
-            const editedMessageId = (_a = content.protocolMessage.key) === null || _a === void 0 ? void 0 : _a.id;
+            let body = '';
+            let editedMessageId;
+            if ((0, pwa_1.IsEditedMessage)(message.message)) {
+                const content = (0, baileys_1.normalizeMessageContent)(message.message);
+                body = extractBody(content.protocolMessage.editedMessage) || '';
+                editedMessageId = (_a = content.protocolMessage.key) === null || _a === void 0 ? void 0 : _a.id;
+            }
+            else if ((0, pwa_1.IsSecretEncryptedMessageEdit)(message.message)) {
+                const sem = message.message.secretEncryptedMessage;
+                editedMessageId = (_b = sem.targetMessageKey) === null || _b === void 0 ? void 0 : _b.id;
+                body =
+                    (await this.tryDecryptNOWEBSecretMessageEdit(message, sem)) || '';
+            }
             return Object.assign(Object.assign({}, waMessage), { body: body, editedMessageId: editedMessageId, _data: message });
         }));
         this.events2.get(enums_dto_1.WAHAEvents.MESSAGE_EDITED).switch(messagesEdited$);
@@ -1541,7 +1574,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
                 }
                 this.logger.debug({ jid: update.id }, 'Profile picture updated');
                 const url = await this.refreshProfilePicture(update.id);
-                if ((0, baileys_2.isPnUser)(update.id) || (0, jid_utils_1.isLidUser)(update.id)) {
+                if ((0, baileys_1.isPnUser)(update.id) || (0, jid_utils_1.isLidUser)(update.id)) {
                     const cus = (0, jids_1.toCusFormat)(update.id);
                     this.profilePictures.set(cus, url);
                     const phone = update.id.split('@')[0];
@@ -1578,44 +1611,124 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         return reaction;
     }
     shouldProcessIncomingMessage(message) {
-        var _a, _b, _c, _d, _e, _f, _g, _h;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
         if (!message)
             return;
-        if (!message.message)
+        if (!message.message && !((_a = message.key) === null || _a === void 0 ? void 0 : _a.isViewOnce))
             return;
-        if (message.message.reactionMessage)
+        if ((_b = message.message) === null || _b === void 0 ? void 0 : _b.reactionMessage)
             return;
-        if (message.message.pollUpdateMessage)
+        if ((_c = message.message) === null || _c === void 0 ? void 0 : _c.pollUpdateMessage)
             return;
-        if ((_a = message.message.call) === null || _a === void 0 ? void 0 : _a.callKey)
+        if ((_e = (_d = message.message) === null || _d === void 0 ? void 0 : _d.call) === null || _e === void 0 ? void 0 : _e.callKey)
             return;
-        if (((_c = (_b = message.message) === null || _b === void 0 ? void 0 : _b.protocolMessage) === null || _c === void 0 ? void 0 : _c.type) ===
-            baileys_2.proto.Message.ProtocolMessage.Type.REVOKE)
+        if (((_g = (_f = message.message) === null || _f === void 0 ? void 0 : _f.protocolMessage) === null || _g === void 0 ? void 0 : _g.type) ===
+            baileys_1.proto.Message.ProtocolMessage.Type.REVOKE)
             return;
         if ((0, pwa_1.IsEditedMessage)(message.message))
             return;
+        if ((0, pwa_1.IsSecretEncryptedMessageEdit)(message.message))
+            return;
         if ((0, pwa_1.IsHistorySyncNotification)(message.message))
             return;
-        if (((_e = (_d = message.message) === null || _d === void 0 ? void 0 : _d.protocolMessage) === null || _e === void 0 ? void 0 : _e.type) ===
-            baileys_2.proto.Message.ProtocolMessage.Type.EPHEMERAL_SYNC_RESPONSE)
+        if (((_j = (_h = message.message) === null || _h === void 0 ? void 0 : _h.protocolMessage) === null || _j === void 0 ? void 0 : _j.type) ===
+            baileys_1.proto.Message.ProtocolMessage.Type.EPHEMERAL_SYNC_RESPONSE)
             return;
-        if (((_g = (_f = message.message) === null || _f === void 0 ? void 0 : _f.protocolMessage) === null || _g === void 0 ? void 0 : _g.type) ===
-            baileys_2.proto.Message.ProtocolMessage.Type
+        if (((_l = (_k = message.message) === null || _k === void 0 ? void 0 : _k.protocolMessage) === null || _l === void 0 ? void 0 : _l.type) ===
+            baileys_1.proto.Message.ProtocolMessage.Type
                 .PEER_DATA_OPERATION_REQUEST_RESPONSE_MESSAGE)
             return;
-        const normalizedContent = (0, baileys_2.normalizeMessageContent)(message.message);
-        const contentType = (0, baileys_2.getContentType)(normalizedContent);
+        const normalizedContent = (0, baileys_1.normalizeMessageContent)(message.message);
+        const contentType = (0, baileys_1.getContentType)(normalizedContent);
         if (contentType == 'deviceSentMessage') {
             return;
         }
         const hasSomeContent = !!contentType;
         if (!hasSomeContent) {
-            if ((_h = message === null || message === void 0 ? void 0 : message.message) === null || _h === void 0 ? void 0 : _h.senderKeyDistributionMessage)
+            if ((_m = message === null || message === void 0 ? void 0 : message.message) === null || _m === void 0 ? void 0 : _m.senderKeyDistributionMessage)
                 return;
         }
         return true;
     }
+    async tryDecryptNOWEBSecretMessageEdit(editMessage, sem) {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+        const targetKey = sem.targetMessageKey;
+        const origMsgId = targetKey === null || targetKey === void 0 ? void 0 : targetKey.id;
+        if (!origMsgId) {
+            return '';
+        }
+        const jidsToTry = [targetKey.remoteJid, (_a = editMessage.key) === null || _a === void 0 ? void 0 : _a.remoteJid].filter(Boolean);
+        let stored;
+        for (const jid of jidsToTry) {
+            stored = await ((_b = this.store) === null || _b === void 0 ? void 0 : _b.loadMessage(jid, origMsgId));
+            if (stored) {
+                break;
+            }
+        }
+        if (!stored) {
+            this.logger.debug({ origMsgId: origMsgId }, 'NOWEB message edit decrypt: original message not found in store');
+            return '';
+        }
+        const secretBytes = (_e = (_d = (_c = (0, baileys_1.normalizeMessageContent)(stored.message)) === null || _c === void 0 ? void 0 : _c.messageContextInfo) === null || _d === void 0 ? void 0 : _d.messageSecret) !== null && _e !== void 0 ? _e : (_g = (_f = stored.message) === null || _f === void 0 ? void 0 : _f.messageContextInfo) === null || _g === void 0 ? void 0 : _g.messageSecret;
+        if (!secretBytes || secretBytes.length !== 32) {
+            this.logger.debug({ origMsgId: origMsgId }, 'NOWEB message edit decrypt: missing messageSecret on original');
+            return '';
+        }
+        const origSecret = Buffer.from(secretBytes);
+        const encPayload = sem.encPayload ? Buffer.from(sem.encPayload) : null;
+        const encIv = sem.encIv ? Buffer.from(sem.encIv) : null;
+        if (!encPayload || !encIv) {
+            return '';
+        }
+        const editInfo = {
+            Chat: (_h = editMessage.key) === null || _h === void 0 ? void 0 : _h.remoteJid,
+            Sender: ((_j = editMessage.key) === null || _j === void 0 ? void 0 : _j.participant) ||
+                (((_k = editMessage.key) === null || _k === void 0 ? void 0 : _k.fromMe) ? undefined : (_l = editMessage.key) === null || _l === void 0 ? void 0 : _l.remoteJid),
+        };
+        const modificationSenderJid = (0, secretEncryptedMessageEdit_1.jidToNonAD)(editInfo.Sender || '');
+        const primaryOrig = (0, secretEncryptedMessageEdit_1.getOrigSenderJidForMsgSecret)(editInfo, {
+            fromMe: targetKey.fromMe,
+            remoteJID: targetKey.remoteJid,
+            participant: targetKey.participant,
+        });
+        const candidates = [primaryOrig];
+        const remoteNonAD = targetKey.remoteJid
+            ? (0, secretEncryptedMessageEdit_1.jidToNonAD)(targetKey.remoteJid)
+            : '';
+        if (remoteNonAD && !candidates.includes(remoteNonAD)) {
+            candidates.push(remoteNonAD);
+        }
+        const participantNonAD = targetKey.participant
+            ? (0, secretEncryptedMessageEdit_1.jidToNonAD)(targetKey.participant)
+            : '';
+        if (participantNonAD && !candidates.includes(participantNonAD)) {
+            candidates.push(participantNonAD);
+        }
+        let lastErr;
+        for (const origSenderJid of candidates) {
+            try {
+                const decoded = (0, secretEncryptedMessageEdit_1.decryptSecretEncryptedMessageEditProto)({
+                    encPayload: encPayload,
+                    encIv: encIv,
+                    origMsgId: origMsgId,
+                    origSenderJid: origSenderJid,
+                    modificationSenderJid: modificationSenderJid,
+                    origMsgSecret: origSecret,
+                });
+                const text = extractBody(decoded) || '';
+                if (text) {
+                    return text;
+                }
+            }
+            catch (err) {
+                lastErr = err;
+            }
+        }
+        this.logger.debug({ err: lastErr, origMsgId: origMsgId, candidates: candidates }, 'NOWEB message edit decrypt: AES-GCM or protobuf decode failed');
+        return '';
+    }
     async processIncomingMessage(message, downloadMedia) {
+        var _a;
         if (!this.shouldProcessIncomingMessage(message)) {
             return null;
         }
@@ -1623,9 +1736,22 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         if (!wamessage) {
             return null;
         }
-        if (downloadMedia) {
-            const media = await this.downloadMediaSafe(message);
-            wamessage.media = media;
+        if (downloadMedia && wamessage.hasMedia) {
+            wamessage.media = await this.downloadMediaSafe(message);
+        }
+        if (downloadMedia && ((_a = wamessage.replyTo) === null || _a === void 0 ? void 0 : _a.hasMedia)) {
+            const mediaContent = (0, utils_1.extractMediaContent)(wamessage.replyTo._data);
+            const m = {
+                message: wamessage.replyTo._data,
+                key: {
+                    id: wamessage.replyTo.id ||
+                        mediaContent.fileSha256 ||
+                        mediaContent.fileEncSha256 ||
+                        mediaContent.mediaKeyTimestamp,
+                    remoteJid: message.key.remoteJid,
+                },
+            };
+            wamessage.replyTo.media = await this.downloadMediaSafe(m);
         }
         return wamessage;
     }
@@ -1671,7 +1797,9 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
     }
     extractReplyTo(message) {
         var _a;
-        const msgType = (0, baileys_2.getContentType)(message);
+        if (!message)
+            return null;
+        const msgType = (0, baileys_1.getContentType)(message);
         const contextInfo = (_a = message[msgType]) === null || _a === void 0 ? void 0 : _a.contextInfo;
         if (!contextInfo) {
             return null;
@@ -1681,10 +1809,13 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
             return null;
         }
         const body = extractBody(quotedMessage);
+        const mediaContent = (0, utils_1.extractMediaContent)(quotedMessage);
         return {
             id: contextInfo.stanzaId,
             participant: (0, jids_1.toCusFormat)(contextInfo.participant),
             body: body,
+            hasMedia: Boolean(mediaContent),
+            media: null,
             _data: quotedMessage,
         };
     }
@@ -1759,14 +1890,14 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
             return;
         }
         for (const pollUpdate of pollUpdates) {
-            const votes = (0, baileys_2.getAggregateVotesInPollMessage)({
+            const votes = (0, baileys_1.getAggregateVotesInPollMessage)({
                 message: pollCreationMessage,
                 pollUpdates: [pollUpdate],
             });
             const selectedOptions = [];
             for (const voteAggregation of votes) {
                 for (const voter of voteAggregation.voters) {
-                    if (voter === (0, baileys_2.getKeyAuthor)(pollUpdate.pollUpdateMessageKey)) {
+                    if (voter === (0, baileys_1.getKeyAuthor)(pollUpdate.pollUpdateMessageKey)) {
                         selectedOptions.push(voteAggregation.name);
                     }
                 }
@@ -1840,7 +1971,8 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
         return null;
     }
     async downloadMedia(message) {
-        const processor = new NOWEBEngineMediaProcessor(this, this.loggerBuilder);
+        let processor = new NOWEBEngineMediaProcessor(this, this.loggerBuilder);
+        processor = new LottieMediaProcessorWrapper_1.LottieMediaProcessorWrapper(processor, this.logger);
         return this.mediaManager.processMedia(processor, message, this.name);
     }
     async getMessageOptions(request) {
@@ -1851,7 +1983,8 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
             quoted = await this.store.loadMessage(jid, key.id);
         }
         const chat = await this.store.getChat(jid);
-        const messageId = this.generateMessageID();
+        const messageId = request.id ? request.id : this.generateMessageID();
+        this.saveSentMessageId(messageId);
         return {
             quoted: quoted,
             ephemeralExpiration: chat === null || chat === void 0 ? void 0 : chat.ephemeralExpiration,
@@ -1872,7 +2005,7 @@ class WhatsappSessionNoWebCore extends session_abc_1.WhatsappSession {
     }
     generateMessageID() {
         var _a;
-        const id = (0, baileys_2.generateMessageIDV2)((_a = this.sock.user) === null || _a === void 0 ? void 0 : _a.id);
+        const id = (0, baileys_1.generateMessageIDV2)((_a = this.sock.user) === null || _a === void 0 ? void 0 : _a.id);
         this.saveSentMessageId(id);
         return id;
     }
@@ -1890,6 +2023,18 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], WhatsappSessionNoWebCore.prototype, "setProfileStatus", null);
+__decorate([
+    (0, activity_1.Activity)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [chatting_dto_1.CheckNumberStatusQuery]),
+    __metadata("design:returntype", Promise)
+], WhatsappSessionNoWebCore.prototype, "checkNumberStatus", null);
+__decorate([
+    (0, activity_1.Activity)(),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], WhatsappSessionNoWebCore.prototype, "rejectCall", null);
 __decorate([
     (0, activity_1.Activity)(),
     __metadata("design:type", Function),
@@ -2265,6 +2410,7 @@ class NOWEBEngineMediaProcessor {
         return content.mimetype;
     }
     async getMediaBuffer(message) {
+        var _a, e_1, _b, _c;
         const content = (0, utils_1.extractMediaContent)(message.message);
         const url = content.url;
         if (!hasPath(url)) {
@@ -2273,16 +2419,33 @@ class NOWEBEngineMediaProcessor {
         if ((0, jids_1.isJidNewsletter)(message.key.remoteJid) && content.directPath) {
             content.url = null;
         }
-        return (await (0, baileys_2.downloadMediaMessage)(message, 'buffer', {}, {
+        const stream = await (0, baileys_1.downloadMediaMessage)(message, 'stream', {}, {
             logger: this.logger,
             reuploadRequest: this.session.sock.updateMediaMessage,
         }).finally(() => {
             content.url = url;
-        }));
+        });
+        const chunks = [];
+        try {
+            for (var _d = true, stream_1 = __asyncValues(stream), stream_1_1; stream_1_1 = await stream_1.next(), _a = stream_1_1.done, !_a; _d = true) {
+                _c = stream_1_1.value;
+                _d = false;
+                const chunk = _c;
+                chunks.push(chunk);
+            }
+        }
+        catch (e_1_1) { e_1 = { error: e_1_1 }; }
+        finally {
+            try {
+                if (!_d && !_a && (_b = stream_1.return)) await _b.call(stream_1);
+            }
+            finally { if (e_1) throw e_1.error; }
+        }
+        return Buffer.concat(chunks);
     }
     getFilename(message) {
         var _a;
-        const content = (0, baileys_2.extractMessageContent)(message.message);
+        const content = (0, baileys_1.extractMessageContent)(message.message);
         return ((_a = content === null || content === void 0 ? void 0 : content.documentMessage) === null || _a === void 0 ? void 0 : _a.fileName) || null;
     }
 }
@@ -2358,7 +2521,7 @@ function extractBody(message) {
     if (!message) {
         return null;
     }
-    const content = (0, baileys_2.extractMessageContent)(message);
+    const content = (0, baileys_1.extractMessageContent)(message);
     if (!content) {
         return null;
     }
@@ -2383,7 +2546,7 @@ function extractBody(message) {
         body = (_e = content.buttonsResponseMessage) === null || _e === void 0 ? void 0 : _e.selectedDisplayText;
     }
     if (!body) {
-        const type = (0, baileys_2.getContentType)(content);
+        const type = (0, baileys_1.getContentType)(content);
         if (type == 'listMessage') {
             const list = content.listMessage;
             const parts = [list.title, list.description, list.footerText];

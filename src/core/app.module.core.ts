@@ -22,6 +22,7 @@ import { ApiKeyAuthMiddleware } from '@waha/core/auth/api-key-auth.middleware';
 import { BasicAuthFunction } from '@waha/core/auth/basicAuth';
 import { WebSocketAuth } from '@waha/core/auth/WebSocketAuth';
 import { GowsEngineConfigService } from '@waha/core/config/GowsEngineConfigService';
+import { WPPEngineConfigService } from '@waha/core/config/WPPEngineConfigService';
 import { WebJSEngineConfigService } from '@waha/core/config/WebJSEngineConfigService';
 import { MediaLocalStorageModule } from '@waha/core/media/local/media.local.storage.module';
 import { MediaLocalStorageConfig } from '@waha/core/media/local/MediaLocalStorageConfig';
@@ -33,6 +34,7 @@ import {
   getPinoHttpUseLevel,
   getPinoLogLevel,
   getPinoTransport,
+  redactUrlParams,
 } from '@waha/utils/logging';
 import * as Joi from 'joi';
 import { LoggerModule } from 'nestjs-pino';
@@ -67,7 +69,8 @@ import { WAHAHealthCheckServiceCore } from './health/WAHAHealthCheckServiceCore'
 import { SessionManagerCore } from './manager.core';
 import { CaslAbilityFactory } from '@waha/core/auth/casl.ability';
 import { PoliciesGuard } from '@waha/core/auth/policies.guard';
-import { ApiKeyService } from '@waha/core/auth/ApiKeyService';
+import { ApiKeyAuthService } from './auth/ApiKeyAuthService';
+import { SessionService } from '@waha/core/services/SessionService';
 
 export const IMPORTS_CORE = [
   ...AppsModuleExports.imports,
@@ -89,11 +92,15 @@ export const IMPORTS_CORE = [
           );
         },
       },
+      redact: {
+        paths: ['req.query["x-api-key"]'],
+        censor: '[REDACTED]',
+      },
       serializers: {
         req: (req) => ({
           id: req.id,
           method: req.method,
-          url: req.url,
+          url: redactUrlParams('x-api-key', req.url, req.query),
           query: req.query,
           params: req.params,
         }),
@@ -176,6 +183,7 @@ export const PROVIDERS_BASE: Provider[] = [
   DashboardConfigServiceCore,
   SwaggerConfigServiceCore,
   WebJSEngineConfigService,
+  WPPEngineConfigService,
   GowsEngineConfigService,
   WhatsappConfigService,
   EngineConfigService,
@@ -183,9 +191,10 @@ export const PROVIDERS_BASE: Provider[] = [
   MediaLocalStorageConfig,
   WebSocketAuth,
   ApiKeyStrategy,
-  ApiKeyService,
+  ApiKeyAuthService,
   CaslAbilityFactory,
   PoliciesGuard,
+  SessionService,
   {
     provide: IApiKeyAuth,
     useFactory: ApiKeyAuthFactory,
@@ -248,7 +257,7 @@ export class AppModuleCore {
     consumer
       .apply(ApiKeyAuthMiddleware)
       .exclude(...exclude)
-      .forRoutes('api', 'health');
+      .forRoutes('api', 'health', 'mcp');
 
     // Dashboard
     const dashboardCredentials = this.dashboardConfig.credentials;
